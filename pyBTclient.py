@@ -6,7 +6,7 @@
 # Description:      A torrent client
 # Author:           Marc Vieira Cardinal
 # Creation Date:    July 16, 2014
-# Revision Date:    July 26, 2014
+# Revision Date:    July 27, 2014
 # Dependencies:
 #    apt-get install python-libtorrent
 # **********
@@ -18,6 +18,7 @@ import time
 import urllib
 import requests
 import tempfile
+import pyinotify
 import libtorrent as lt
 from argparse import ArgumentParser
 
@@ -96,10 +97,54 @@ def ActionDNLDFromKey(logger, args):
 ###
 
 def ActionPushTorrent(logger, args):
-
     requests.post(args["trackerPushUri"],
                   files = { "torrentFile": (args["fileKey"], open(args["torrentFile"], 'rb')) },
                 )
+
+
+#############
+# ActionAutoIndexer
+###
+
+def ActionAutoIndexer(logger, args):
+    logger.info("Watching [%s] and pushing to [%s]" % (args["trackerPushUri"], args["watchPaths"]))
+
+    eventHandler = ActionAutoIndexerEvents(logger, args)
+    watchManager = pyinotify.WatchManager()
+
+    for path in args["watchPaths"]:
+        watchManager.add_watch(path, pyinotify.IN_CLOSE_WRITE, rec = True)
+
+    notifier = pyinotify.Notifier(watchManager, eventHandler)
+
+    logger.info("Main loop starting...")
+    notifier.loop()
+
+
+#############
+# ActionAutoIndexerEvents
+###
+
+class ActionAutoIndexerEvents(pyinotify.ProcessEvent):
+    def __init__(self, logger, args):
+        self.logger = logger.getChild(self.__class__.__name__)
+        self.args   = args
+
+    def process_IN_CLOSE_WRITE(self, event):
+        path = os.path.join(event.path, event.name)
+        self.logger("process_IN_CLOSE_WRITE -> %s" % path)
+
+        tempFile = tempfile.NamedTemporaryFile(delete = false)
+        tempFile.close()
+
+        ActionMKTorrent(logger, { "destFile":         tempFile.name,
+                                  "sourceFile":       path,
+                                  "trackerAnnUri":    self.args["trackerAnnUri"] })
+        ActionPushTorrent(logger, { "fileKey":        event.name,
+                                    "torrentFile":    tempFile.name,
+                                    "trackerPushUri": self.args["trackerPushUri"] })
+
+        tempFile.unlink(tempFile.name)
 
 
 #############
@@ -150,10 +195,10 @@ if __name__ == "__main__":
     mktorrentParser.add_argument("destFile",
                                  action = "store",
                                  help = "Filename of the torrent to be created")
-    mktorrentParser.set_defaults(func = ActionMKTorrent)
     mktorrentParser.add_argument("trackerAnnUri",
                                  action = "store",
                                  help = "The address of the announce endpoint")
+    mktorrentParser.set_defaults(func = ActionMKTorrent)
 
     # Define the dnldtorrent sub-parser
     dnldtorrentParser = subParsers.add_parser("dnldtorrent", help = "dnldtorrent help")
@@ -217,6 +262,9 @@ if __name__ == "__main__":
 
     # Define the autoindexer sub-parser
     autoindexerParser = subParsers.add_parser("autoindexer", help = "autoindexer help")
+    autoindexerParser.add_argument("trackerAnnUri",
+                                   action = "store",
+                                   help = "The address of the announce endpoint")
     autoindexerParser.add_argument("trackerPushUri",
                                    action = "store",
                                    help = "The address of the push endpoint")
@@ -225,11 +273,6 @@ if __name__ == "__main__":
                                    nargs = argparse.REMAINDER,
                                    help = "The address of the push endpoint")
     autoindexerParser.set_defaults(func = ActionAutoIndexer)
-
-
-# TODO: --autoIndex or --autoUpload for a daemon that
-# watches a specific folder?
-
 
     # Define the tests sub-parser
     testsParser = subParsers.add_parser("tests", help = "tests help")
