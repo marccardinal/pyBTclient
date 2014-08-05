@@ -6,7 +6,7 @@
 # Description:      A torrent client
 # Author:           Marc Vieira Cardinal
 # Creation Date:    July 16, 2014
-# Revision Date:    July 27, 2014
+# Revision Date:    August 04, 2014
 # Dependencies:
 #    apt-get install python-libtorrent
 # **********
@@ -51,8 +51,12 @@ def ActionDNLDTorrent(logger, args):
                   args["portEnd"])
 
     info = lt.torrent_info(args["torrentFile"])
-    h = ses.add_torrent({'ti':        info,
-                         'save_path': args["destPath"]})
+    h = ses.add_torrent({'ti':           info,
+                         'save_path':    args["destPath"],
+                         'storage_mode': (lt.storage_mode_t.storage_mode_allocate
+                                          if args["allocateStorage"]
+                                          else lt.storage_mode_t.storage_mode_sparse)
+                         })
 
     logger.info("Starting [%s]" % h.name())
     while (not h.is_seed()):
@@ -220,6 +224,10 @@ if __name__ == "__main__":
                                    type = int,
                                    default = 6981,
                                    help = "Location of the resulting file(s)")
+    dnldtorrentParser.add_argument("--allocate-storage",
+                                   dest = "allocateStorage",
+                                   action = "store_true",
+                                   help = "This option does a full storage allocation")
     dnldtorrentParser.set_defaults(func = ActionDNLDTorrent)
 
     # Define the dnldfromkey sub-parser
@@ -245,6 +253,10 @@ if __name__ == "__main__":
                                    type = int,
                                    default = 6981,
                                    help = "Location of the resulting file(s)")
+    dnldfromkeyParser.add_argument("--allocate-storage",
+                                   dest = "allocateStorage",
+                                   action = "store_true",
+                                   help = "This option does a full storage allocation")
     dnldfromkeyParser.set_defaults(func = ActionDNLDFromKey)
 
     # Define the pushtorrent sub-parser
