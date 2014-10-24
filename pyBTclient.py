@@ -9,6 +9,9 @@
 # Revision Date:    August 04, 2014
 # Dependencies:
 #    apt-get install python-libtorrent
+# Resources:
+#   http://www.rasterbar.com/products/libtorrent/python_binding.html
+#   http://www.rasterbar.com/products/libtorrent/reference-Core.html#torrent_handle
 # **********
 
 
